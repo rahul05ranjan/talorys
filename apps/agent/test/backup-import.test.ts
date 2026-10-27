@@ -96,6 +96,30 @@ describe("backup import treats the file as untrusted", () => {
     }
   });
 
+  it("does not revert a conversation renamed after the backup was made", async () => {
+    const c = await loggedIn();
+    const { conversation } = await c.json("/api/conversations", { method: "POST", body: { title: "New conversation" } });
+    try {
+      await c.json(`/api/conversations/${conversation.id}`, { method: "PATCH", body: { title: "My new name" } });
+      // A copy from a backup made before the rename: the older title must not come back.
+      const backup = backupOf({
+        conversations: [{ id: conversation.id, title: "Old title", created_at: at(0), updated_at: at(0) }],
+      });
+      await c.json("/api/import", { method: "POST", body: backup });
+      expect((await c.json(`/api/conversations/${conversation.id}`)).conversation.title).toBe("My new name");
+
+      // A copy newer than the local rename still imports.
+      const newer = new Date(Date.now() + 60_000).toISOString();
+      await c.json("/api/import", {
+        method: "POST",
+        body: backupOf({ conversations: [{ id: conversation.id, title: "Newer backup title", created_at: at(0), updated_at: newer }] }),
+      });
+      expect((await c.json(`/api/conversations/${conversation.id}`)).conversation.title).toBe("Newer backup title");
+    } finally {
+      await c.call(`/api/conversations/${conversation.id}`, { method: "DELETE" });
+    }
+  });
+
   it("keeps well-formed tool activity, including approvals, and drops only malformed entries", () => {
     const ok = { id: "1", name: "delete_task", label: "Deleting", status: "success", approval: { id: "p", summary: "Delete task", status: "pending", error: null, expires_at: at(9) } };
     expect(decodeTools(JSON.stringify([ok, { id: 2 }, "junk"]))).toEqual([ok]);

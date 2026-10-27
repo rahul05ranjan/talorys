@@ -99,7 +99,8 @@ export async function importData(s: Services, raw: unknown): Promise<ImportSumma
       // dropped and regenerated from the (visible) messages when needed.
       db.run(
         `INSERT INTO tal_conversations (id, title, summary, summary_upto, created_at, updated_at) VALUES (?, ?, NULL, NULL, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at`,
+         ON CONFLICT(id) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at
+         WHERE excluded.updated_at > tal_conversations.updated_at`,
         c.id, c.title, c.created_at, c.updated_at,
       );
     }
